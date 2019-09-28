@@ -12,7 +12,7 @@ import java.util.stream.IntStream;
 public class Main {
 
     public static void main(String[] args) throws Exception {
-        ExecutorService executorService = Executors.newFixedThreadPool(4);
+        ExecutorService executorService = Executors.newFixedThreadPool(20);
 
         List<Job> jobList = IntStream.range(0, 100)
                 .mapToObj(i -> new Job("" + i))
@@ -21,6 +21,7 @@ public class Main {
 
         Feeder feeder = new Feeder(executorService, jobList);
         List<String> stringList = feeder.feed();
+        stringList.forEach(log::debug);
 
         executorService.shutdown();
 

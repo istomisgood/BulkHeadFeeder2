@@ -9,8 +9,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class Feeder {
@@ -32,33 +32,25 @@ public class Feeder {
     }
 
     public List<String> feed() {
-
         log.debug("Start feed");
 
         CompletableFuture<Void> allOf = CompletableFuture.allOf(this.jobFutures.values().stream().toArray(CompletableFuture[]::new));
         allOf.whenComplete((aVoid, throwable) -> {
             log.debug("allOf complete");
         });
+        CompletableFuture<List<String>> futureResults = allOf.thenApply(aVoid -> this.jobFutures.values().stream().map(CompletableFuture::join).collect(Collectors.toList()));
 
-        for (int i = 0; i < this.bulkhead.getBulkheadConfig().getMaxConcurrentCalls(); i++) {
-            acquireNext();
-        }
+        while (bulkhead.tryAcquirePermission()) ;
 
         try {
-            log.debug("Feed before get");
-            allOf.get();
-            log.debug("Feed after get");
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (ExecutionException e) {
-            e.printStackTrace();
+            return futureResults.get();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
-
-        return null;
     }
 
     private void acquireNext() {
-        bulkhead.acquirePermission();
+        bulkhead.tryAcquirePermission();
     }
 
     private void performJob(Job job) {
