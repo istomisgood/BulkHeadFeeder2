@@ -3,6 +3,9 @@ package au.net.istomisgood.bulkheadfeeder;
 import io.github.resilience4j.bulkhead.Bulkhead;
 import io.github.resilience4j.bulkhead.BulkheadConfig;
 import io.github.resilience4j.bulkhead.BulkheadRegistry;
+import io.github.resilience4j.bulkhead.event.BulkheadEvent;
+import io.reactivex.rxjava3.subjects.Subject;
+import io.reactivex.rxjava3.subjects.UnicastSubject;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
@@ -21,6 +24,8 @@ public class Feeder {
 
     private Object stick = new Object();
 
+    private Subject<BulkheadEvent> bus = UnicastSubject.create();
+
     public Feeder(ExecutorService executorService, List<Job> jobList) {
         this.executorService = executorService;
         this.jobList = jobList;
@@ -29,6 +34,19 @@ public class Feeder {
         this.jobFutures = new ConcurrentHashMap<>();
 
         jobList.stream().forEach(job -> this.jobFutures.put(job.getName(), new CompletableFuture<String>()));
+
+        bus.subscribe(o -> {
+            switch (o.getEventType()) {
+                case CALL_FINISHED:
+                    onFinished();
+                    break;
+                case CALL_REJECTED:
+                    log.warn(o.toString());
+                case CALL_PERMITTED:
+                    onPermitted();
+                    break;
+            }
+        });
     }
 
     public List<String> feed() {
@@ -37,6 +55,7 @@ public class Feeder {
         CompletableFuture<Void> allOf = CompletableFuture.allOf(this.jobFutures.values().stream().toArray(CompletableFuture[]::new));
         allOf.whenComplete((aVoid, throwable) -> {
             log.debug("allOf complete");
+            this.bus.onComplete();
         });
         CompletableFuture<List<String>> futureResults = allOf.thenApply(aVoid -> this.jobFutures.values().stream().map(CompletableFuture::join).collect(Collectors.toList()));
 
@@ -89,15 +108,7 @@ public class Feeder {
 
         Bulkhead bulkhead = registry.bulkhead("TomsBulkHead");
 
-        bulkhead.getEventPublisher().onCallFinished(event -> {
-            log.debug("onCallFinished {}", event.toString());
-            onFinished();
-        });
-        bulkhead.getEventPublisher().onCallPermitted(event -> {
-            log.debug("onCallPermitted {}", event.toString());
-            onPermitted();
-        });
-        bulkhead.getEventPublisher().onCallRejected(event -> log.debug("onCallRejected {}", event.toString()));
+        bulkhead.getEventPublisher().onEvent(this.bus::onNext);
         return bulkhead;
     }
 
