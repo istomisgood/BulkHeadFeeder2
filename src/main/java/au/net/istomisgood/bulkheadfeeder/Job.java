@@ -20,7 +20,7 @@ public class Job implements Supplier<String> {
     @Override
     public String get() {
         log.debug("Inside Get Job {}", name);
-        int timeout = new Random().nextInt(1000);
+        int timeout = new Random().nextInt(1550);
         log.debug("Job {} sleeping for {}", name, timeout);
         try {
             TimeUnit.MILLISECONDS.sleep(timeout);

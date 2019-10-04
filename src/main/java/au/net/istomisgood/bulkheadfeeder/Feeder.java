@@ -7,17 +7,16 @@ import io.github.resilience4j.bulkhead.event.BulkheadEvent;
 import io.reactivex.rxjava3.subjects.Subject;
 import io.reactivex.rxjava3.subjects.UnicastSubject;
 import lombok.extern.slf4j.Slf4j;
+import rx.Observable;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 
 @Slf4j
 public class Feeder {
-    private final ExecutorService executorService;
     private final Bulkhead bulkhead;
     private final List<Job> jobList;
     private final ConcurrentHashMap<String, CompletableFuture<String>> jobFutures;
@@ -26,8 +25,7 @@ public class Feeder {
 
     private Subject<BulkheadEvent> bus = UnicastSubject.create();
 
-    public Feeder(ExecutorService executorService, List<Job> jobList) {
-        this.executorService = executorService;
+    public Feeder(List<Job> jobList) {
         this.jobList = jobList;
         this.bulkhead = getBulkhead();
 
@@ -74,9 +72,12 @@ public class Feeder {
 
     private void performJob(Job job) {
         log.debug("Before submit job {}", job.getName());
-        executorService.submit(() -> {
-            log.debug("submitted to executor job: {}", job.getName());
-            jobFutures.get(job.getName()).complete(job.get());
+        HystrixJob hystrixJob = new HystrixJob(job);
+        Observable<String> stringObservable = hystrixJob.toObservable();
+        CompletableFuture<String> future = jobFutures.get(job.getName());
+        stringObservable.subscribe(s -> {
+            log.debug("onnext {}", s);
+            future.complete(s);
             bulkhead.onComplete();
         });
         log.debug("After submit job {}", job.getName());
