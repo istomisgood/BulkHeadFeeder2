@@ -11,14 +11,21 @@ repositories {
     mavenCentral()
 }
 
+test {
+    useJUnitPlatform()
+}
+
 dependencies {
     compileOnly 'org.projectlombok:lombok:1.18.10'
     annotationProcessor 'org.projectlombok:lombok:1.18.10'
 
-    testCompile group: 'junit', name: 'junit', version: '4.12'
     implementation group: 'io.github.resilience4j', name: 'resilience4j-bulkhead', version: '1.0.0'
     implementation 'io.reactivex.rxjava3:rxjava:3.0.0-RC3'
     implementation 'com.netflix.hystrix:hystrix-core:1.5.18'
 
     runtimeOnly group: 'org.slf4j', name: 'slf4j-simple', version: '1.7.26'
+
+    testImplementation group: 'org.mockito', name: 'mockito-core', version: '3.1.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.3.1'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.3.1'
 }
